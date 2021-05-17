@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+      <meta charset="utf-8">
+      <title>Camera Details</title>
+  </head>
+  <body>
+      <form action="{{ url_for('cameraAdd')}}" method="post">
+          <h5>Enter the Details Info</h5>
+          <div>
+              <input type="text" name="uname" placeholder="uname">
+          </div>
+          <div>
+              <input type="text" name="passowrd" placeholder="passowrd">
+          </div>
+          <div>
+              <button >Submit</button>
+          </div>
+      </form>
+  </body>
+
+</html>
