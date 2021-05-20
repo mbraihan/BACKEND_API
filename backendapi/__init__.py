@@ -19,7 +19,7 @@ uri = os.getenv("POSTGRES_URI")
 
 
 app = Flask(__name__)
-CORS(app, support_credentials=True)
+CORS(app)
 app.config['SQLALCHEMY_DATABASE_URI'] = uri
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 

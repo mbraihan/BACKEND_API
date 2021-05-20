@@ -64,7 +64,7 @@ class Camera(db.Model):
     password        = db.Column(db.String(120), nullable = False)
     ip_addr         = db.Column(db.String(120), nullable = False)
     port            = db.Column(db.Integer, nullable = False)
-    channel         = db.Column(db.Integer, nullable = False)
+    channel         = db.Column(db.String(120), nullable = False)
     stream_type     = db.Column(db.Integer, nullable = True)
     mac_addr        = db.Column(db.String(120), nullable = False)
     serial          = db.Column(db.Integer, nullable = False)
