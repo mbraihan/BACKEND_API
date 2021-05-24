@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, flash, jsonify, redirect, url_for
-from backendapi.models import Client, License, Camera, CameraStation, Dataset, DatasetLabel, StationLabel
+from backendapi.models import Client, License, Camera, CameraStation, Dataset, DatasetLabel, StationLabel, CustomerEntity, Alerts, Transactions, ShopLiftingAlerts
 from flask_cors import CORS, cross_origin
 from datetime import datetime
 
@@ -285,3 +285,48 @@ def datasetQuery():
         anno.append(q.annotationFileNname)
 
     return jsonify({'Image' : im}, {'Annotation' : anno})
+
+
+@app.route("/transaction-query", methods = ['GET'])
+def datasetQuery():
+    res = request.get_json()
+    query = Transactions.query.order_by(Transactions.id.desc()).limit(10)
+    print(query)
+    vid = []
+    s_time = []
+    e_time = []
+    for q in query:
+        vid.append(q.videoLocation)
+        s_time.append(q.start_time)
+        e_time.append(q.end_time)
+
+    return jsonify({'Video' : vid}, {'Start Time' : s_time}, {'End Time' : e_time})
+
+
+@app.route("/alerts-query", methods = ['GET'])
+def datasetQuery():
+    res = request.get_json()
+    t_id = res['id']
+    query = Alerts.query.filter_by(transactionId = t_id).all()
+    print(query)
+    im = []
+    s_time = []
+    for q in query:
+        im.append(q.photoLocation)
+        s_time.append(q.timeStamps)
+
+    return jsonify({'Image' : im}, {'Time Stamps' : s_time})
+
+
+@app.route("/transaction-query", methods = ['GET'])
+def datasetQuery():
+    res = request.get_json()
+    query = ShopLiftingAlerts.query.order_by(ShopLiftingAlerts.id.desc()).limit(50)
+    print(query)
+    im = []
+    s_time = []
+    for q in query:
+        im.append(q.photoLocation)
+        s_time.append(q.timeStamps)
+
+    return jsonify({'Image' : im}, {'Time Stamps' : s_time})

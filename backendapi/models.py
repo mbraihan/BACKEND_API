@@ -169,9 +169,101 @@ class DatasetLabel(db.Model):
         self.datasetId              = datasetId
 
     def __repr__(self):
-        return f"Dataset('{self.dName}', '{self.label}' '{self.photoLocation}', '{self.annotationFileNname}')"
+        return f"Dataset('{self.dName}', '{self.label}', '{self.photoLocation}', '{self.annotationFileNname}')"
 
 
     def toString(self):
         return ({'dname' : self.dName, 'label' : self.label, 'photoLocation' : self.photoLocation,
         'annotationFileNname' : self.annotationFileNname})
+
+class CustomerEntity(db.Model):
+    __tablename__ = 'customerentity'
+    id = db.Column(db.Integer, primary_key = True, autoincrement = True)
+    ce_name = db.Column(db.String, nullable = False)
+    photoLocation = db.Column(db.String, nullable = False, unique = True)
+    timeStamps = db.Column(db.DateTime, nullable = False, default = datetime.utcnow)
+    transactionTable = db.relationship('Transactions', backref='datatset_label', lazy =  True)
+    shopliftingalertsTable = db.relationship('ShopLiftingAlerts', backref='datatset_label', lazy =  True)
+
+    def __init__(self, ce_name, photoLocation, timeStamps):
+        # super().__init__()
+        self.ce_name                = ce_name
+        self.photoLocation          = photoLocation
+        self.timeStamps             = timeStamps
+
+    def __repr__(self):
+        return f"CustomerEntity('{self.ce_name}', '{self.photoLocation}', '{self.timeStamps}')"
+
+
+    def toString(self):
+        return ({'ce_name' : self.ce_name, 'photoLocation' : self.photoLocation,
+        'timeStamps' : self.timeStamps})
+
+class Transactions(db.Model):
+    __tablename__ = 'transactions'
+    id                  = db.Column(db.Integer, primary_key = True, autoincrement = True)
+    start_time          = db.Column(db.DateTime, nullable = False, default = datetime.utcnow)
+    end_time            = db.Column(db.DateTime, nullable = False, default = datetime.utcnow)
+    videoLocation       = db.Column(db.String, nullable = False, unique = True)
+    customerEntityId    = db.Column(db.Integer, db.ForeignKey('customerentity.id'), nullable = False)
+    alertsTable         = db.relationship('Alerts', backref='datatset_label', lazy =  True)
+
+
+    def __init__(self, start_time, end_time, videoLocation, customerEntityId):
+        # super().__init__()
+        self.start_time             = start_time
+        self.end_time               = end_time
+        self.videoLocation          = videoLocation
+        self.customerEntityId       = customerEntityId
+
+    def __repr__(self):
+        return f"CustomerEntity('{self.start_time}', '{self.end_time}', '{self.videoLocation}'), '{self.customerEntityId}')"
+
+
+    def toString(self):
+        return ({'start_time' : self.start_time, 'end_time' : self.end_time,
+        'videoLocation' : self.videoLocation, 'customerEntityId' : self.customerEntityId})
+
+class Alerts(db.Model):
+    __tablename__ = 'alerts'
+    id                  = db.Column(db.Integer, primary_key = True, autoincrement = True)
+    photoLocation       = db.Column(db.String, nullable = False, unique = True)
+    timeStamps          = db.Column(db.DateTime, nullable = False, default = datetime.utcnow)
+    transactionId       = db.Column(db.Integer, db.ForeignKey('transactions.id'), nullable = False)
+
+
+    def __init__(self, photoLocation, timeStamps, transactionId):
+        # super().__init__()
+        self.photoLocation          = photoLocation
+        self.timeStamps             = timeStamps
+        self.transactionId          = transactionId
+
+    def __repr__(self):
+        return f"CustomerEntity('{self.photoLocation}', '{self.timeStamps}')"
+
+
+    def toString(self):
+        return ({'photoLocation' : self.photoLocation,
+        'timeStamps' : self.timeStamps})
+
+class ShopLiftingAlerts(db.Model):
+    __tablename__ = 'shopliftingalerts'
+    id                  = db.Column(db.Integer, primary_key = True, autoincrement = True)
+    photoLocation       = db.Column(db.String, nullable = False, unique = True)
+    timeStamps          = db.Column(db.DateTime, nullable = False, default = datetime.utcnow)
+    customerEntityId    = db.Column(db.Integer, db.ForeignKey('customerentity.id'), nullable = False)
+
+
+    def __init__(self, photoLocation, timeStamps, customerEntityId):
+        # super().__init__()
+        self.photoLocation          = photoLocation
+        self.timeStamps             = timeStamps
+        customerEntityId            = customerEntityId
+
+    def __repr__(self):
+        return f"CustomerEntity('{self.photoLocation}', '{self.timeStamps}')"
+
+
+    def toString(self):
+        return ({'photoLocation' : self.photoLocation,
+        'timeStamps' : self.timeStamps})
