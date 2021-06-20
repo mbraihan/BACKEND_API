@@ -128,14 +128,16 @@ def removeLicense():
 
 @app.route("/camera-add", methods=["POST"])
 def cameraAdd():
-    u_name          = request.form['u_name']
-    password        = request.form['password']
-    ip_addr         = request.form['ip_addr']
-    port            = request.form['port']
-    channel         = request.form['channel']
-    stream_type     = request.form['stream_type']
-    mac_addr        = request.form['mac_addr']
-    serial          = request.form['serial']
+    res             = request.get_json()
+    u_name          = res['u_name']
+    password        = res['password']
+    ip_addr         = res['ip_addr']
+    port            = res['port']
+    channel         = res['channel']
+    stream_type     = res['stream_type']
+    mac_addr        = res['mac_addr']
+    serial          = res['s_num']
+    s_name          = res['s_name']
     license_id      = db.session.query(License).filter_by(camera_mac = mac_addr).first().id
 
     expired         = db.session.query(License).filter_by(camera_mac = mac_addr).first().expiry_date
@@ -147,7 +149,13 @@ def cameraAdd():
         db.session.add(entry)
         db.session.commit()
 
-    return render_template("index.html ")
+    camera_id = db.session.query(Camera).filter_by(serial=serial).first().id
+    s_num = serial
+
+    entry = CameraStation(s_name, s_num, camera_id)
+    db.session.add(entry)
+    db.session.commit()
+    return jsonify({'Camera': camera_id}, status_code)
 
 @app.route("/get-camera", methods=['GET'])
 def getCamera():
@@ -156,6 +164,18 @@ def getCamera():
     for cam in cams:
         cam_list.append(cam.id)
     return jsonify({'Camera' : cam_list})
+
+@app.route("/remove-camera", methods=['POST'])
+def removeCamera():
+    res = request.get_json()
+    mac_addr = res['mac_addr']
+    cl = db.session.query(Camera).filter_by(mac_addr=mac_addr).first()
+    if cl is not None:
+        db.session.delete(cl)
+        db.session.commit()
+        return jsonify('Camera Removed', status_code)
+    else:
+        return jsonify("No such camera Exist", error_code)
 
 
 def gen_frames(vs):
