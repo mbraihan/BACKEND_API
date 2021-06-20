@@ -6,7 +6,7 @@ from datetime import datetime
 import uuid
 import sys
 import urllib
-import helper
+# import helper
 import re
 from urllib.request import urlopen
 import json
@@ -33,7 +33,9 @@ CORS(app)
 key         = os.getenv("S3_ACCESS_KEY")
 secret      = os.getenv("S3_SECRET_ACCESS_KEY")
 bucket      = os.getenv("S3_BUCKET_NAME")
-s3 = boto3.resource('s3', aws_access_key_id=key, aws_secret_access_key=secret)
+s3          = boto3.resource('s3', aws_access_key_id=key, aws_secret_access_key=secret)
+status_code = 200
+error_code  = 404
 
 @app.route("/")
 def home():
@@ -43,13 +45,14 @@ def home():
 @app.route("/client-add", methods=["POST"])
 def clientAdd():
     regex = '^(\w|\.|\_|\-)+[@](\w|\_|\-|\.)+[.]\w{2,3}$'
-    u_name          = request.form['u_name']
-    full_name       = request.form['full_name']
-    email_address   = request.form['email_address']
-    address         = request.form['address']
-    city            = request.form['city']
-    zipcode         = request.form['zipcode']
-    country         = request.form['country']
+    res                 = request.get_json()
+    full_name           = res['full_name']
+    u_name              = res['u_name']
+    email_address       = res['email_address']
+    address             = res['address']
+    city                = res['city']
+    zipcode             = res['zipcode']
+    country             = res['country']
 
 
     if (re.search(regex, email_address)):
@@ -60,32 +63,68 @@ def clientAdd():
         print("Invalid Email")
 
 
-    return render_template("index.html")
+    return jsonify('Client Added', status_code)
 
 
-@app.route("/remove-client", methods = ['POST'])
+@app.route("/show-client", methods=['GET'])
+def showClient():
+    clients = Client.query.all()
+    c_l = []
+    for c in clients:
+        c_l.append(c.full_name)
+    return jsonify({'Client': c_l})
+
+@app.route("/remove-client", methods=['POST'])
 def removeClient():
-    user_name   = request.form['user_name']
-    cl = db.session.query(Client).filter_by(user_name = user_name).first()
-    db.session.delete(cl)
-    db.session.commit()
+    res = request.get_json()
+    user_name = res['user_name']
+    cl = db.session.query(Client).filter_by(user_name=user_name).first()
+    if cl is not None:
+        db.session.delete(cl)
+        db.session.commit()
+        return jsonify('Client Removed', status_code)
+    else:
+        return jsonify("Client Dosen't Exist", error_code)
     print(cl)
-    return render_template("index.html")
 
 
 @app.route("/license-add", methods=['POST'])
 def licenseAdd():
-    camera_mac      = request.form["camera_mac"]
-    start_date      = request.form["start_date"]
-    expiry_date     = request.form["expiry_date"]
-    client_name     = request.form["client_name"]
+    res             = request.get_json()
+    camera_mac      = res['camera_mac']
+    start_date      = res['start_date']
+    expiry_date     = res['expiry_date']
+    client_name     = res['client_name']
     client_id       = db.session.query(Client).filter_by(user_name = client_name).first().id
 
     entry = License(camera_mac, start_date, expiry_date, client_id)
     db.session.add(entry)
     db.session.commit()
 
-    return render_template("index.html")
+    return jsonify('License Added', status_code)
+
+@app.route("/show-license", methods=['GET'])
+def showLicense():
+    # user_name   = request.form['user_name']
+    licenses = License.query.all()
+    l_l = []
+    for l in licenses:
+        l_l.append(l.camera_mac)
+    return jsonify({'License': l_l})
+
+@app.route("/remove-license", methods=['POST'])
+def removeLicense():
+    res = request.get_json()
+    camera_mac = res['camera_mac']
+    cl = db.session.query(License).filter_by(camera_mac=camera_mac).first()
+    if cl is not None:
+        db.session.delete(cl)
+        db.session.commit()
+        print(cl)
+        return jsonify('License Removed', status_code)
+    else:
+        return jsonify("License Doesn't Exist", error_code)
+
 
 @app.route("/camera-add", methods=["POST"])
 def cameraAdd():
