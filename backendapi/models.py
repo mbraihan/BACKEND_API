@@ -67,11 +67,11 @@ class Camera(db.Model):
     channel         = db.Column(db.String(120), nullable = False)
     stream_type     = db.Column(db.Integer, nullable = True)
     mac_addr        = db.Column(db.String(120), nullable = False)
-    serial          = db.Column(db.Integer, nullable = False)
+#    serial          = db.Column(db.Integer, nullable = False)
     license_id      = db.Column(db.Integer, db.ForeignKey('license.id'), nullable = False)
     station         = db.relationship('CameraStation', backref = 'station_id', lazy = True)
 
-    def __init__(self, u_name, password, ip_addr, port, channel, stream_type, mac_addr, serial, license_id):
+    def __init__(self, u_name, password, ip_addr, port, channel, stream_type, mac_addr, license_id):
         self.u_name         = u_name
         self.password       = password
         self.ip_addr        = ip_addr
@@ -79,16 +79,16 @@ class Camera(db.Model):
         self.channel        = channel
         self.stream_type    = stream_type
         self.mac_addr       = mac_addr
-        self.serial         = serial
+#        self.serial         = serial
         self.license_id     = license_id
 
     def __repr__(self):
-        return f"Camera('{self.u_name}', '{self.password}', '{self.ip_addr}', '{self.port}', '{self.channel}', '{self.stream_type}', '{self.mac_addr}', '{self.serial}')"
+        return f"Camera('{self.u_name}', '{self.password}', '{self.ip_addr}', '{self.port}', '{self.channel}', '{self.stream_type}', '{self.mac_addr}')"
 
     def toString(self):
         return ({'u_name' : self.u_name, 'password' : self.password, 'ip_addr' : self.ip_addr,
         'port' : self.port, 'channel' : self.channel, 'stream_type' : self.stream_type,
-        'mac_addr' : self.mac_addr, 'serial' : self.serial})
+        'mac_addr' : self.mac_addr})
 
 
 class CameraStation(db.Model):

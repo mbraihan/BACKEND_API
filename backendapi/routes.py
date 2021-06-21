@@ -68,17 +68,17 @@ def clientAdd():
 
 @app.route("/show-client", methods=['GET'])
 def showClient():
-    clients = Client.query.all()
-    c_l = []
+    clients     = Client.query.all()
+    c_l         = []
     for c in clients:
         c_l.append(c.full_name)
     return jsonify({'Client': c_l})
 
 @app.route("/remove-client", methods=['POST'])
 def removeClient():
-    res = request.get_json()
-    user_name = res['user_name']
-    cl = db.session.query(Client).filter_by(user_name=user_name).first()
+    res         = request.get_json()
+    user_name   = res['user_name']
+    cl          = db.session.query(Client).filter_by(user_name=user_name).first()
     if cl is not None:
         db.session.delete(cl)
         db.session.commit()
@@ -96,31 +96,32 @@ def licenseAdd():
     expiry_date     = res['expiry_date']
     client_name     = res['client_name']
     client_id       = db.session.query(Client).filter_by(user_name = client_name).first().id
+    if client_id is not None:
+        entry = License(camera_mac, start_date, expiry_date, client_id)
+        db.session.add(entry)
+        db.session.commit()
+        return jsonify('License Added', status_code)
+    else:
+        return jsonify('Invalid client name', error_code)
 
-    entry = License(camera_mac, start_date, expiry_date, client_id)
-    db.session.add(entry)
-    db.session.commit()
-
-    return jsonify('License Added', status_code)
 
 @app.route("/show-license", methods=['GET'])
 def showLicense():
-    # user_name   = request.form['user_name']
-    licenses = License.query.all()
-    l_l = []
+    licenses    = License.query.all()
+    l_l         = []
     for l in licenses:
         l_l.append(l.camera_mac)
     return jsonify({'License': l_l})
 
 @app.route("/remove-license", methods=['POST'])
 def removeLicense():
-    res = request.get_json()
-    camera_mac = res['camera_mac']
-    cl = db.session.query(License).filter_by(camera_mac=camera_mac).first()
-    if cl is not None:
-        db.session.delete(cl)
+    res         = request.get_json()
+    camera_mac  = res['camera_mac']
+    l          = db.session.query(License).filter_by(camera_mac=camera_mac).first()
+    if l is not None:
+        db.session.delete(l)
         db.session.commit()
-        print(cl)
+        print(l)
         return jsonify('License Removed', status_code)
     else:
         return jsonify("License Doesn't Exist", error_code)
@@ -144,38 +145,52 @@ def cameraAdd():
     now             = datetime.today()
     if now > expired:
         print ("renew License")
+        return jsonify('Please renew License', error_code)
     else:
         entry = Camera(u_name, password, ip_addr, port, channel, stream_type, mac_addr, serial, license_id)
         db.session.add(entry)
         db.session.commit()
+        return jsonify(status_code)
 
-    camera_id = db.session.query(Camera).filter_by(serial=serial).first().id
-    s_num = serial
-
-    entry = CameraStation(s_name, s_num, camera_id)
-    db.session.add(entry)
-    db.session.commit()
-    return jsonify({'Camera': camera_id}, status_code)
 
 @app.route("/get-camera", methods=['GET'])
 def getCamera():
-    cams = db.session.query(Camera).all()
-    cam_list = []
+    cams        = db.session.query(Camera).all()
+    cam_list    = []
     for cam in cams:
         cam_list.append(cam.id)
     return jsonify({'Camera' : cam_list})
 
+
 @app.route("/remove-camera", methods=['POST'])
 def removeCamera():
-    res = request.get_json()
-    mac_addr = res['mac_addr']
-    cl = db.session.query(Camera).filter_by(mac_addr=mac_addr).first()
-    if cl is not None:
-        db.session.delete(cl)
+    res         = request.get_json()
+    mac_addr    = res['mac_addr']
+    c           = db.session.query(Camera).filter_by(mac_addr=mac_addr).first()
+    if c is not None:
+        db.session.delete(c)
         db.session.commit()
         return jsonify('Camera Removed', status_code)
     else:
-        return jsonify("No such camera Exist", error_code)
+        return jsonify("No such camera exist", error_code)
+
+
+@app.route("/camera-station-add", methods=["POST"])
+def stationAdd():
+    res         = request.get_json()
+    s_name      = res['s_name']
+    s_num       = res['s_num']
+    mac_addr    = res['mac_addr']
+    camera_id   = db.session.query(Camera).filter_by(mac_addr = mac_addr).first().id
+
+    if camera_id is not None:
+        entry   = CameraStation(s_name, s_num, camera_id)
+        db.session.add(entry)
+        db.session.commit()
+        return jsonify({'Camera': camera_id}, status_code)
+    else:
+        return jsonify('Please provide a correct mac address', error_code)
+
 
 
 def gen_frames(vs):
@@ -188,33 +203,21 @@ def gen_frames(vs):
             frame = buffer.tobytes()
             yield (b'--frame\r\n'b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
 
-# @app.route("/feed/<int:id>")
-@app.route('/rtsp_feed', methods=['GET'])
+
+@app.route('/rtsp_feed', methods=['POST'])
 def gen_url():
     res = request.get_json()
-    id = res['id']
-    u = db.session.query(Camera).filter_by(id = id).first().u_name
-    p = db.session.query(Camera).filter_by(id = id).first().password
-    i = db.session.query(Camera).filter_by(id = id).first().ip_addr
-    po = str(db.session.query(Camera).filter_by(id = id).first().port)
-    c = str(db.session.query(Camera).filter_by(id = id).first().channel)
-    s = str(db.session.query(Camera).filter_by(id = id).first().stream_type)
+    u   = db.session.query(Camera).filter_by(id=id).first().u_name
+    p   = db.session.query(Camera).filter_by(id=id).first().password
+    i   = db.session.query(Camera).filter_by(id=id).first().ip_addr
+    po  = str(db.session.query(Camera).filter_by(id=id).first().port)
+    c   = str(db.session.query(Camera).filter_by(id=id).first().channel)
+    s   = str(db.session.query(Camera).filter_by(id=id).first().stream_type)
 
     rtsp_url = 'rtsp://' + u + ':' + p + '@' + i + ':' + po + '/ch0' + c + '/' + s
     vs = VideoStream(rtsp_url).start()
 
     return Response(gen_frames(vs), mimetype='multipart/x-mixed-replace; boundary=frame')
-
-
-@app.route("/camera-station-add", methods=["POST"])
-def stationAdd():
-    s_name        = request.form['s_name']
-    s_num         = request.form['s_num']
-    camera_id     = db.session.query(Camera).filter_by(serial = s_num).first().id
-
-    entry = CameraStation(s_name, s_num, camera_id)
-    db.session.add(entry)
-    db.session.commit()
 
 @app.route("/station-label-add", methods=['POST'])
 def stationtLabelAdd():
