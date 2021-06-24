@@ -4,6 +4,11 @@ from sqlalchemy import UniqueConstraint, exc
 from sqlalchemy.orm import backref
 from backendapi import db
 
+from sqlalchemy import inspect
+
+import json
+from json import JSONEncoder
+
 
 class Client(db.Model):
     __tablename__       = 'client'
@@ -34,15 +39,18 @@ class Client(db.Model):
         'email_address' : self.email_address, 'city' : self.city,
         'zipcode' : self.zipcode, 'country' : self.country})
 
+    def toDict(self):
+        return { c.key: getattr(self, c.key) for c in inspect(self).mapper.column_attrs }
+
 
 class License(db.Model):
     __tablename__       = 'license'
     id                  = db.Column(db.Integer, primary_key = True, autoincrement = True)
-    camera_mac          = db.Column(db.String(120), nullable = False)
+    camera_mac          = db.Column(db.String(120), unique = True, nullable = False)
     start_date          = db.Column(db.DateTime, nullable = False, default = datetime.utcnow)
     expiry_date         = db.Column(db.DateTime, nullable = False, default = datetime.utcnow)
     client_id           = db.Column(db.Integer, db.ForeignKey('client.id'), nullable=False)
-    camera              = db.relationship('Camera', backref = 'licensee', lazy = True)
+    camera              = db.relationship('Camera', uselist = False, backref = 'licensee', lazy = True)
 
     def __init__(self, camera_mac, start_date, expiry_date, client_id):
         self.camera_mac     = camera_mac
@@ -50,11 +58,15 @@ class License(db.Model):
         self.expiry_date    = expiry_date
         self.client_id      = client_id
 
-    def __repr__(self):
-        return f"License('{self.camera_mac}', '{self.start_date}', '{self.expiry_date}', '{self.client_id}')"
+    # def __repr__(self):
+    #     return f"License('{self.camera_mac}', '{self.start_date}', '{self.expiry_date}', '{self.client_id}')"
 
     def toString(self):
         return ({'camera_mac' : self.camera_mac, 'start_date' : self.start_date, 'expiry_date' : self.expiry_date})
+
+    def toDict(self):
+        return { c.key: getattr(self, c.key) for c in inspect(self).mapper.column_attrs }
+
 
 
 class Camera(db.Model):
@@ -64,75 +76,78 @@ class Camera(db.Model):
     password        = db.Column(db.String(120), nullable = False)
     ip_addr         = db.Column(db.String(120), nullable = False)
     port            = db.Column(db.Integer, nullable = False)
-    channel         = db.Column(db.String(120), nullable = False)
-    stream_type     = db.Column(db.Integer, nullable = True)
-    mac_addr        = db.Column(db.String(120), nullable = False)
-#    serial          = db.Column(db.Integer, nullable = False)
+    rtsp_url        = db.Column(db.String(200), nullable=False)
+    mac_addr        = db.Column(db.String(120), unique = True, nullable = False)
     license_id      = db.Column(db.Integer, db.ForeignKey('license.id'), nullable = False)
-    station         = db.relationship('CameraStation', backref = 'station_id', lazy = True)
+    station         = db.relationship('CameraStation', uselist = False, backref = 'station_id', lazy = True)
 
-    def __init__(self, u_name, password, ip_addr, port, channel, stream_type, mac_addr, license_id):
+    def __init__(self, u_name, password, ip_addr, port, rtsp_url, mac_addr, license_id):
         self.u_name         = u_name
         self.password       = password
         self.ip_addr        = ip_addr
         self.port           = port
-        self.channel        = channel
-        self.stream_type    = stream_type
+        self.rtsp_url       = rtsp_url
         self.mac_addr       = mac_addr
-#        self.serial         = serial
         self.license_id     = license_id
 
     def __repr__(self):
-        return f"Camera('{self.u_name}', '{self.password}', '{self.ip_addr}', '{self.port}', '{self.channel}', '{self.stream_type}', '{self.mac_addr}')"
+        return f"Camera('{self.u_name}', '{self.password}', '{self.ip_addr}', '{self.port}', '{self.rtsp_url}', '{self.mac_addr}')"
 
     def toString(self):
         return ({'u_name' : self.u_name, 'password' : self.password, 'ip_addr' : self.ip_addr,
-        'port' : self.port, 'channel' : self.channel, 'stream_type' : self.stream_type,
-        'mac_addr' : self.mac_addr})
+        'port' : self.port, 'rtsp_url' : self.rtsp_url, 'mac_addr' : self.mac_addr})
+
+    def toDict(self):
+        return { c.key: getattr(self, c.key) for c in inspect(self).mapper.column_attrs }
 
 
 class CameraStation(db.Model):
     __tablename__   = 'station'
 
     id              = db.Column(db.Integer, primary_key = True, autoincrement = True)
-    s_name          = db.Column(db.String(120), nullable = False)
-    s_num           = db.Column(db.Integer, nullable = False)
+    s_name          = db.Column(db.String(120), unique = True, nullable = False)
     camera_id       = db.Column(db.Integer, db.ForeignKey('camera.id'), nullable = False)
     stationLabel    = db.relationship('StationLabel', backref='station_label', lazy =  True)
 
-    def __init__(self, s_name, s_num, camera_id):
+    def __init__(self, s_name, camera_id):
         self.s_name     = s_name
-        self.s_num      = s_num
         self.camera_id  = camera_id
 
     def __repr__(self):
-        return f"CameraStation('{self.s_name}', '{self.s_num}')"
+        return f"CameraStation('{self.s_name}')"
+
+    def toString(self):
+        return ({'s_name' : self.s_name})
+
+    def toDict(self):
+        return { c.key: getattr(self, c.key) for c in inspect(self).mapper.column_attrs }
 
 
 class StationLabel(db.Model):
     __tablename__ = 'stationlabel'
     id = db.Column(db.Integer, primary_key = True, autoincrement = True)
     sName = db.Column(db.String, nullable = False)
-    s_no = db.Column(db.Integer, nullable = False)
     photoLocation = db.Column(db.String, nullable = False, unique = True)
     annotationFileNname = db.Column(db.String, nullable = False)
     stationId = db.Column(db.Integer, db.ForeignKey('station.id'), nullable = False)
 
-    def __init__(self, sName, s_no, photoLocation, annotationFileName, stationId):
+    def __init__(self, sName, photoLocation, annotationFileName, stationId):
         # super().__init__()
         self.sName                  = sName
-        self.s_no                   = s_no
         self.photoLocation          = photoLocation
         self.annotationFileNname    = annotationFileName
         self.stationId              = stationId
 
     def __repr__(self):
-        return f"Dataset('{self.sName}', '{self.s_no}' '{self.photoLocation}', '{self.annotationFileNname}')"
+        return f"Dataset('{self.sName}', '{self.photoLocation}', '{self.annotationFileNname}')"
 
 
     def toString(self):
-        return ({'dname' : self.sName, 'label' : self.s_no, 'photoLocation' : self.photoLocation,
+        return ({'sName' : self.sName, 'photoLocation' : self.photoLocation,
         'annotationFileNname' : self.annotationFileNname})
+
+    def toDict(self):
+        return { c.key: getattr(self, c.key) for c in inspect(self).mapper.column_attrs }
 
 
 class Dataset(db.Model):
@@ -149,6 +164,9 @@ class Dataset(db.Model):
 
     def toString(self):
         return ({'name' : self.name})
+
+    def toDict(self):
+        return { c.key: getattr(self, c.key) for c in inspect(self).mapper.column_attrs }
 
 
 class DatasetLabel(db.Model):
@@ -173,31 +191,36 @@ class DatasetLabel(db.Model):
 
 
     def toString(self):
-        return ({'dname' : self.dName, 'label' : self.label, 'photoLocation' : self.photoLocation,
+        return ({'dName' : self.dName, 'label' : self.label, 'photoLocation' : self.photoLocation,
         'annotationFileNname' : self.annotationFileNname})
+
+    def toDict(self):
+        return { c.key: getattr(self, c.key) for c in inspect(self).mapper.column_attrs }
+
 
 class CustomerEntity(db.Model):
     __tablename__ = 'customerentity'
     id = db.Column(db.Integer, primary_key = True, autoincrement = True)
     ce_name = db.Column(db.String, nullable = False)
     photoLocation = db.Column(db.String, nullable = False, unique = True)
-    timeStamps = db.Column(db.DateTime, nullable = False, default = datetime.utcnow)
     transactionTable = db.relationship('Transactions', backref='datatset_label', lazy =  True)
     shopliftingalertsTable = db.relationship('ShopLiftingAlerts', backref='datatset_label', lazy =  True)
 
-    def __init__(self, ce_name, photoLocation, timeStamps):
+    def __init__(self, ce_name, photoLocation):
         # super().__init__()
         self.ce_name                = ce_name
         self.photoLocation          = photoLocation
-        self.timeStamps             = timeStamps
 
     def __repr__(self):
-        return f"CustomerEntity('{self.ce_name}', '{self.photoLocation}', '{self.timeStamps}')"
+        return f"CustomerEntity('{self.ce_name}', '{self.photoLocation}')"
 
 
     def toString(self):
-        return ({'ce_name' : self.ce_name, 'photoLocation' : self.photoLocation,
-        'timeStamps' : self.timeStamps})
+        return ({'ce_name' : self.ce_name, 'photoLocation' : self.photoLocation})
+
+    def toDict(self):
+        return { c.key: getattr(self, c.key) for c in inspect(self).mapper.column_attrs }
+
 
 class Transactions(db.Model):
     __tablename__ = 'transactions'
@@ -206,7 +229,7 @@ class Transactions(db.Model):
     end_time            = db.Column(db.DateTime, nullable = False, default = datetime.utcnow)
     videoLocation       = db.Column(db.String, nullable = False, unique = True)
     customerEntityId    = db.Column(db.Integer, db.ForeignKey('customerentity.id'), nullable = False)
-    alertsTable         = db.relationship('Alerts', backref='datatset_label', lazy =  True)
+    alertsTable         = db.relationship('Alerts', backref='transaction_label', lazy =  True)
 
 
     def __init__(self, start_time, end_time, videoLocation, customerEntityId):
@@ -217,12 +240,16 @@ class Transactions(db.Model):
         self.customerEntityId       = customerEntityId
 
     def __repr__(self):
-        return f"CustomerEntity('{self.start_time}', '{self.end_time}', '{self.videoLocation}'), '{self.customerEntityId}')"
+        return f"Transactions('{self.start_time}', '{self.end_time}', '{self.videoLocation}'), '{self.customerEntityId}')"
 
 
     def toString(self):
         return ({'start_time' : self.start_time, 'end_time' : self.end_time,
         'videoLocation' : self.videoLocation, 'customerEntityId' : self.customerEntityId})
+
+    def toDict(self):
+        return { c.key: getattr(self, c.key) for c in inspect(self).mapper.column_attrs }
+
 
 class Alerts(db.Model):
     __tablename__ = 'alerts'
@@ -239,12 +266,16 @@ class Alerts(db.Model):
         self.transactionId          = transactionId
 
     def __repr__(self):
-        return f"CustomerEntity('{self.photoLocation}', '{self.timeStamps}')"
+        return f"Alerts('{self.photoLocation}', '{self.timeStamps}')"
 
 
     def toString(self):
         return ({'photoLocation' : self.photoLocation,
         'timeStamps' : self.timeStamps})
+
+    def toDict(self):
+        return { c.key: getattr(self, c.key) for c in inspect(self).mapper.column_attrs }
+
 
 class ShopLiftingAlerts(db.Model):
     __tablename__ = 'shopliftingalerts'
@@ -258,12 +289,15 @@ class ShopLiftingAlerts(db.Model):
         # super().__init__()
         self.photoLocation          = photoLocation
         self.timeStamps             = timeStamps
-        customerEntityId            = customerEntityId
+        self.customerEntityId       = customerEntityId
 
     def __repr__(self):
-        return f"CustomerEntity('{self.photoLocation}', '{self.timeStamps}')"
+        return f"ShopLiftingAlerts('{self.photoLocation}', '{self.timeStamps}')"
 
 
     def toString(self):
         return ({'photoLocation' : self.photoLocation,
         'timeStamps' : self.timeStamps})
+
+    def toDict(self):
+        return { c.key: getattr(self, c.key) for c in inspect(self).mapper.column_attrs }
