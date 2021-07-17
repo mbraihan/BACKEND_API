@@ -58,8 +58,8 @@ class License(db.Model):
         self.expiry_date    = expiry_date
         self.client_id      = client_id
 
-    # def __repr__(self):
-    #     return f"License('{self.camera_mac}', '{self.start_date}', '{self.expiry_date}', '{self.client_id}')"
+    def __repr__(self):
+        return f"License('{self.camera_mac}', '{self.start_date}', '{self.expiry_date}', '{self.client_id}')"
 
     def toString(self):
         return ({'camera_mac' : self.camera_mac, 'start_date' : self.start_date, 'expiry_date' : self.expiry_date})
@@ -151,10 +151,10 @@ class StationLabel(db.Model):
 
 
 class Dataset(db.Model):
-    __tablename__ = 'dataset'
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    name = db.Column(db.String, nullable=False)
-    datasetTable = db.relationship('DatasetLabel', backref='datatset_label', lazy =  True)
+    __tablename__   = 'dataset'
+    id              = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    name            = db.Column(db.String, nullable=False)
+    datasetTable    = db.relationship('DatasetLabel', backref='datatset_label', lazy =  True)
 
     def __init__(self, name):
         self.name = name
@@ -170,13 +170,13 @@ class Dataset(db.Model):
 
 
 class DatasetLabel(db.Model):
-    __tablename__ = 'datasetlabel'
-    id = db.Column(db.Integer, primary_key = True, autoincrement = True)
-    dName = db.Column(db.String, nullable = False)
-    label = db.Column(db.String, nullable = False)
-    photoLocation = db.Column(db.String, nullable = False, unique = True)
+    __tablename__       = 'datasetlabel'
+    id                  = db.Column(db.Integer, primary_key = True, autoincrement = True)
+    dName               = db.Column(db.String, nullable = False)
+    label               = db.Column(db.String, nullable = False)
+    photoLocation       = db.Column(db.String, nullable = False, unique = True)
     annotationFileNname = db.Column(db.String, nullable = False)
-    datasetId = db.Column(db.Integer, db.ForeignKey('dataset.id'), nullable = False)
+    datasetId           = db.Column(db.Integer, db.ForeignKey('dataset.id'), nullable = False)
 
     def __init__(self, dName, label, photoLocation, annotationFileName, datasetId):
         # super().__init__()
@@ -199,12 +199,12 @@ class DatasetLabel(db.Model):
 
 
 class CustomerEntity(db.Model):
-    __tablename__ = 'customerentity'
-    id = db.Column(db.Integer, primary_key = True, autoincrement = True)
-    ce_name = db.Column(db.String, nullable = False)
-    photoLocation = db.Column(db.String, nullable = False, unique = True)
-    transactionTable = db.relationship('Transactions', backref='datatset_label', lazy =  True)
-    shopliftingalertsTable = db.relationship('ShopLiftingAlerts', backref='datatset_label', lazy =  True)
+    __tablename__           = 'customerentity'
+    id                      = db.Column(db.Integer, primary_key = True, autoincrement = True)
+    ce_name                 = db.Column(db.String, nullable = False)
+    photoLocation           = db.Column(db.String, nullable = False, unique = True)
+    transactionTable        = db.relationship('Transactions', backref='datatset_label', lazy =  True)
+    shopliftingalertsTable  = db.relationship('ShopLiftingAlerts', backref='datatset_label', lazy =  True)
 
     def __init__(self, ce_name, photoLocation):
         # super().__init__()

@@ -27,6 +27,11 @@ from backendapi import db
 import cv2
 import imutils
 from imutils.video import VideoStream
+from PIL import Image,ImageEnhance
+import base64
+from io import BytesIO, StringIO
+import numpy as np
+import io
 
 CORS(app)
 
@@ -62,7 +67,7 @@ def clientAdd():
         db.session.add(entry)
         db.session.commit()
     else:
-        print("Invalid Email")
+        return jsonify('Invalid Email', error_code)
 
     status_code = 200
     return jsonify('Client Added', status_code)
@@ -77,6 +82,7 @@ def showClient():
     return jsonify({'Client': c_l})
 
 
+
 @app.route("/remove-client", methods=['POST'])
 def removeClient():
     res         = request.get_json()
@@ -89,6 +95,7 @@ def removeClient():
     else:
         return jsonify("Client Dosen't Exist", error_code)
     print(cl)
+
 
 
 @app.route("/license-add", methods=['POST'])
@@ -108,6 +115,7 @@ def licenseAdd():
         return jsonify('Invalid client name', error_code)
 
 
+
 @app.route("/show-license", methods=['GET'])
 def showLicense():
     licenses = License.query.all()
@@ -116,6 +124,7 @@ def showLicense():
         l_l.append(l.camera_mac)
         # l_l.append(l.toDict())
     return jsonify({'License': l_l})
+
 
 
 @app.route("/remove-license", methods=['POST'])
@@ -127,6 +136,7 @@ def removeLicense():
     cl = db.session.query(License).filter_by(camera_mac=camera_mac).first()
     if cl is not None:
         db.session.delete(cl)
+        # db.session.query(License).filter_by(camera_mac=camera_mac).delete()
         db.session.commit()
         print(cl)
         status_code = 200
@@ -169,6 +179,7 @@ def cameraAdd():
             return jsonify({'Code' : status_code})
 
 
+
 @app.route("/camera-info", methods=['GET'])
 def getCameraInfo():
     cams    = Camera.query.all()
@@ -178,10 +189,11 @@ def getCameraInfo():
     return jsonify({'Camera': cam_list})
 
 
+
 @app.route("/remove-camera", methods=['POST'])
 def removeCamera():
     res = request.get_json()
-    mac_addr = res['mac_addr']
+    mac_addr = str(res['mac_addr'])
     cl = db.session.query(Camera).filter_by(mac_addr=mac_addr).first()
     if cl is not None:
         db.session.delete(cl)
@@ -192,32 +204,26 @@ def removeCamera():
 
 
 
-def gen_frames(vs):
-    while True:
-        frame = vs.read()
-        if frame is None:
-            continue
-        else:
-            frame, buffer = cv2.imencode('.jpg', frame)
-            frame = buffer.tobytes()
-            yield (b'--frame\r\n'b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
-
-# @app.route("/feed/<int:id>")
-
-
 
 @app.route("/camera-station-add", methods=["POST"])
 def stationAdd():
     res         = request.get_json()
     s_name      = res['s_name']
     camera_id   = res ['camera_id']
-    if camera_id is not None:
-        entry   = CameraStation(s_name, camera_id)
-        db.session.add(entry)
-        db.session.commit()
-        return jsonify({'Camera': camera_id}, {'Code' : status_code})
+    duplicate   = bool(CameraStation.query.filter_by(camera_id=camera_id).first())
+    if duplicate:
+        return jsonify ({'Message':'This camera is already registered with a station'}, {'Code' : error_code})
     else:
-        return jsonify({'Message' : 'Please provide a correct mac address'}, {'Code' : error_code})
+        if camera_id is not None:
+            entry   = CameraStation(s_name, camera_id)
+            db.session.add(entry)
+            db.session.commit()
+            s_id = CameraStation.query.filter_by(s_name = s_name).first().id
+            print(s_id)
+            return jsonify({'station_id': s_id}, {'Code' : status_code})
+        else:
+            return jsonify({'Message' : 'Please provide a correct mac address'}, {'Code' : error_code})
+
 
 
 @app.route("/get-camera-station", methods=['GET'])
@@ -225,9 +231,9 @@ def getCameraStation():
     stations = db.session.query(CameraStation).all()
     s_list = []
     for s in stations:
-        s_list.append(s.id)
-        s_list.append(s.mac_addr)
+        s_list.append(s.toDict())
     return jsonify({'Camera_Station': s_list})
+
 
 
 @app.route("/remove-camera-station", methods=['POST'])
@@ -247,18 +253,9 @@ def removeCameraStation():
 def gen_url():
     res = request.get_json()
     id = res['id']
-    u = db.session.query(Camera).filter_by(id=id).first().u_name
-    p = db.session.query(Camera).filter_by(id=id).first().password
-    i = db.session.query(Camera).filter_by(id=id).first().ip_addr
-    po = str(db.session.query(Camera).filter_by(id=id).first().port)
-    c = str(db.session.query(Camera).filter_by(id=id).first().channel)
-    s = str(db.session.query(Camera).filter_by(id=id).first().stream_type)
 
-    rtsp_url = 'rtsp://' + u + ':' + p + '@' + i + ':' + po + '/ch0' + c + '/' + s
-    # vs = VideoStream(rtsp_url).start()
+    rtsp_url = db.session.query(Camera).filter_by(id=id).first().rtsp_url
 
-    # return Response(gen_frames(vs), mimetype='multipart/x-mixed-replace; boundary=frame')
-    # id = str(id)
     return jsonify({'RTSP_URL' : rtsp_url}, status_code)
 
 
@@ -267,59 +264,88 @@ def stationtLabelAdd():
 
     if request.method == 'POST':
         res = request.get_json()
-        sName = res['sName']
         sId = res ['id']
-
-        d = res['data']
+        sName = CameraStation.query.filter_by(id = sId).first().s_name
+        # d = res['data']
         im = []
         label = []
         annot = []
         i = 0
-        for d in res['data']:
+        for d in res['annotationData']:
             im = d['img'].split(",")
             im = im[1]
+            im = Image.open(BytesIO(base64.b64decode(im)))
+            image = cv2.cvtColor(np.array(im), cv2.COLOR_BGR2RGB)
+
+            img = Image.fromarray(image).convert('RGB')
+            out_img = BytesIO()
+            img.save(out_img, format='png')
+            out_img.seek(0)
+
             label = d['label']
+            print(label)
+
+
             annot = d['annot'].split("=")
             annot = annot[1].split(">")
             annot = annot[0].split(" ")
             annot = annot[1:5]
+            # annot = d['annot']
             annot = ' '.join(annot)
-            annot_file = sName + '/' + sName + '_' + label[i] + '.txt'
-            img_file = sName + '/' + sName + '_' + label[i] + '.png'
+            # print(annot)
+
+            annot_file = 'Station' + '/' + sName + '_' + label[i] + '.txt'
+            img_file = 'Station' + '/' + sName + '_' + label[i] + '.png'
+
+
             s3.Object(bucket, annot_file).put(Body=annot)
             annot_url = f"https://{bucket}.s3.amazonaws.com/{annot_file}"
-            s3.Object(bucket, img_file).put(Body=im)
+
+
+            s3.Bucket(bucket).put_object(Key = img_file, Body = out_img, ContentType = 'image/PNG')
             img_url = f"https://{bucket}.s3.amazonaws.com/{img_file}"
+
+
             photoLocation = img_url
             annotationFileName = annot_url
 
             photoLocation = img_url
             annotationFileName = annot_url
-            datasetId = sId
+            stationId = sId
 
-            entry = StationLabel(sName, s_no, photoLocation,
-                                 annotationFileName, datasetId)
+            entry = StationLabel(sName, photoLocation,
+                                 annotationFileName, stationId)
 
             db.session.add(entry)
             db.session.commit()
+            print(i)
+        i = i + 1
+    status_code = 200
+    print(i)
+    return res, status_code
+
+
+@app.route("/remove-station-dataset", methods=['POST'])
+def removeSDataset():
+    res = request.get_json()
+    sName = res['name']
+    d = db.session.query(StationLabel).filter_by(sName=sName).first()
+    db.session.delete(d)
+    db.session.commit()
 
     status_code = 200
-    return res, status_code
+    return jsonify('Dataset removed', status_code)
 
 
 @app.route("/station-query", methods=['GET'])
 def stationQuery():
-    res = request.get_json()
-    name = res['name']
-    query = StationLabel.query.filter_by(sName=name).all()
+    query = StationLabel.query.all()
     print(query)
-    im = []
-    anno = []
+    data_label = []
     for q in query:
-        im.append(q.photoLocation)
-        anno.append(q.annotationFileNname)
+        data_label.append(q.toDict())
 
-    return jsonify({'Image': im}, {'Annotation': anno})
+    return jsonify({'Station_info': data_label})
 
 
 @app.route("/get-dataset", methods=['GET'])
@@ -331,15 +357,71 @@ def getDataset():
     return jsonify({'Dataset': d_l})
 
 
+@app.route("/get-data", methods=['GET'])
+def getData():
+    data = Dataset.query.all()
+    r_data = []
+    for d in data:
+        f_data = {}
+        dd = DatasetLabel.query.filter_by(datasetId = d.id)
+        f_data["name"] = d.name
+        f_data["id"] = d.id
+        all_image = []
+        for img in dd:
+            image = {}
+            image["id"] = img.id
+            image["label"] = img.label
+            image["image"] = img.photoLocation
+            all_image.append(image)
+        f_data["iamges"] = all_image
+        r_data.append(f_data)
+    return jsonify(r_data)
+
+
+@app.route("/get-data/<int:dataset_id>", methods=['GET'])
+def getSData(dataset_id):
+    data = Dataset.query.filter_by(id=dataset_id)
+    r_data = []
+    for d in data:
+        f_data = {}
+        dd = DatasetLabel.query.filter_by(datasetId = d.id)
+        f_data["name"] = d.name
+        f_data["id"] = d.id
+        all_image = []
+        for img in dd:
+            image = {}
+            image["id"] = img.id
+            image["label"] = img.label
+            image["image"] = img.photoLocation
+            all_image.append(image)
+        f_data["iamges"] = all_image
+        r_data.append(f_data)
+    return jsonify(r_data)
+
+
+@app.route("/remove-data", methods = ['POST'])
+def removeData():
+    res = request.get_json()
+    rem = res['id']
+    for r in rem:
+        # print(r['id'])
+        id = r['id']
+        d = db.session.query(DatasetLabel).filter_by(id=id).first()
+        db.session.delete(d)
+        db.session.commit()
+    return jsonify('Images removed', status_code)
+
+
 @app.route("/remove-dataset", methods=['POST'])
 def removeDataset():
-    name = request.form['name']
+    res = request.get_json()
+    name = res['name']
     d = db.session.query(Dataset).filter_by(name=name).first()
     db.session.delete(d)
     db.session.commit()
 
     status_code = 200
-    return jsonify('Dataset removed', 200)
+    return jsonify('Dataset removed', status_code)
 
 
 
@@ -356,6 +438,7 @@ def datasetLabelAdd():
             db.session.commit()
         else:
             print("There exists a dataset of this name")
+            return jsonify('Please use update api to update', error_code)
 
         ###### AWS SEND, DATABASE SAVE #######
         dName = res['data'][0]['dName']
@@ -368,19 +451,102 @@ def datasetLabelAdd():
         for d in res['data']:
             im = d['img'].split(",")
             im = im[1]
+            im = Image.open(BytesIO(base64.b64decode(im)))
+            image = cv2.cvtColor(np.array(im), cv2.COLOR_BGR2RGB)
+
+            img = Image.fromarray(image).convert('RGB')
+            out_img = BytesIO()
+            img.save(out_img, format='png')
+            out_img.seek(0)
+
+
+
             label = d['label']
+            print(label)
+
+
+            annot = d['annot'].split("=")
+            annot = annot[1].split(">")
+            annot = annot[0].split(" ")
+            annot = annot[1:5]
+            annot = ' '.join(annot)
+            print(annot)
+
+            annot_file = 'Dataset' + '/' + dName + '_' + label + '.txt'
+            img_file = 'Dataset' + '/' + dName + '_' + label + '.png'
+
+
+            s3.Object(bucket, annot_file).put(Body=annot)
+            annot_url = f"https://{bucket}.s3.amazonaws.com/{annot_file}"
+
+
+            s3.Bucket(bucket).put_object(Key = img_file, Body = out_img, ContentType = 'image/PNG')
+            img_url = f"https://{bucket}.s3.amazonaws.com/{img_file}"
+
+
+            photoLocation = img_url
+            annotationFileName = annot_url
+            dId = db.session.query(Dataset).filter_by(name=dName).first().id
+            datasetId = dId
+
+            entry = DatasetLabel(dName, label, photoLocation,
+                                 annotationFileName, datasetId)
+
+            db.session.add(entry)
+            db.session.commit()
+            print(i)
+
+        i = i + 1
+        print('I22 = ', i)
+    status_code = 200
+    # print(i)
+    return res, status_code
+
+
+@app.route("/dataset-label-update", methods=['POST'])
+def datasetLabelUpdate():
+
+    if request.method == 'POST':
+        res = request.get_json()
+        name = res['name']
+        ###### AWS SEND, DATABASE SAVE #######
+        dName = res['data'][0]['dName']
+        print(dName)
+        d = res['data']
+        im = []
+        label = []
+        annot = []
+        i = 0
+        for d in res['data']:
+            im = d['img'].split(",")
+            im = im[1]
+            im = Image.open(BytesIO(base64.b64decode(im)))
+            image = cv2.cvtColor(np.array(im), cv2.COLOR_BGR2RGB)
+
+            img = Image.fromarray(image).convert('RGB')
+            out_img = BytesIO()
+            img.save(out_img, format='png')
+            out_img.seek(0)
+
+
+            label = d['label']
+
+
             annot = d['annot'].split("=")
             annot = annot[1].split(">")
             annot = annot[0].split(" ")
             annot = annot[1:5]
             annot = ' '.join(annot)
 
-            annot_file = dName + '/' + dName + '_' + label[i] + '.txt'
-            img_file = dName + '/' + dName + '_' + label[i] + '.png'
+            annot_file = 'Dataset' + '/' + dName + '_' + label + '.txt'
+            img_file = 'Dataset' + '/' + dName + '_' + label + '.png'
+
             s3.Object(bucket, annot_file).put(Body=annot)
             annot_url = f"https://{bucket}.s3.amazonaws.com/{annot_file}"
-            s3.Object(bucket, img_file).put(Body=im)
+
+            s3.Bucket(bucket).put_object(Key = img_file, Body = out_img, ContentType = 'image/PNG')
             img_url = f"https://{bucket}.s3.amazonaws.com/{img_file}"
+
             photoLocation = img_url
             annotationFileName = annot_url
             dId = db.session.query(Dataset).filter_by(name=dName).first().id
@@ -399,188 +565,13 @@ def datasetLabelAdd():
 
 @app.route("/dataset-query", methods=['GET'])
 def datasetQuery():
-    res = request.get_json()
-    name = res['name']
-    query = DatasetLabel.query.filter_by(dName=name).all()
+    query = DatasetLabel.query.all()
     print(query)
-    im = []
-    anno = []
+    data_label = []
     for q in query:
-        im.append(q.photoLocation)
-        anno.append(q.annotationFileNname)
+        data_label.append(q.toDict())
 
-    return jsonify({'Image': im}, {'Annotation': anno})
-
-
-
-@app.route("/customer-entity-add", methods=['POST'])
-def customerEntity():
-    face_cascade = cv2.CascadeClassifier(
-        '.../cascades/data/haarcascade_frontalface_default.xml')
-    eye_cascade = cv2.CascadeClassifier(
-        '.../cascades/data//haarcascade_eye.xml')
-    recognizer = cv2.face.LBPHFaceRecognizer_create()
-    recognizer.read(".../recognizers/face-trainner.yml")
-
-    labels = {"Customer": 1}
-    with open(".../pickles/face-labels.pickle", 'rb') as f:
-        og_labels = pickle.load(f)
-        labels = {v: k for k, v in og_labels.items()}
-
-    font = cv2.FONT_HERSHEY_SIMPLEX
-
-    id = 0
-    p = 0
-    save_value = 0
-
-    current_id = 0
-    label_ids = {}
-    y_labels = []
-    x_train = []
-    a = []
-
-    id = 1
-    u = db.session.query(Camera).filter_by(id=id).first().u_name
-    p = db.session.query(Camera).filter_by(id=id).first().password
-    i = db.session.query(Camera).filter_by(id=id).first().ip_addr
-    po = str(db.session.query(Camera).filter_by(id=id).first().port)
-    c = str(db.session.query(Camera).filter_by(id=id).first().channel)
-    s = str(db.session.query(Camera).filter_by(id=id).first().stream_type)
-
-    camera = 'rtsp://' + u + ':' + p + '@' + i + ':' + po + '/ch0' + c + '/' + s
-
-    capture = VideoStream(camera).start()
-    while True:
-        if capture.isOpened():
-            (status, frame) = capture.read()
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            faces = face_cascade.detectMultiScale(
-                gray,
-                scaleFactor=1.5,
-                minNeighbors=5,
-                minSize=(64, 48))
-            for (x, y, w, h) in faces:
-                cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
-                id_, conf = recognizer.predict(gray[y:y+h, x:x+w])
-                if conf > 0:
-                    if conf > 40 and conf <= 85:
-                        names = labels[id_]
-                        cv2.putText(frame, str(names), (x+5, y-5),
-                                    font, 1, (255, 255, 255), 2)
-                    else:
-                        count = 0
-                        img_count = 1
-                        while(True):
-                            count += 1
-                            image = rgb[y:y+h, x:x+w]
-
-                            ce_name = labels
-                            img_file = 'customer' + '/' + ce_name + '.png'
-                            s3.Object(bucket, img_file).put(Body=image)
-                            img_url = f"https://{bucket}.s3.amazonaws.com/{img_file}"
-                            photoLocation = img_url
-
-                            entry = CustomerEntity(ce_name, photoLocation)
-                            db.session.add(entry)
-                            db.session.commit()
-
-                            img_count += 1
-    return jsonify("Success")
-
-
-@app.route("/checkout-area-transaction-alerts", methods=['POST'])
-def transactionAlerts():
-
-    id = 1
-    u = db.session.query(Camera).filter_by(id=id).first().u_name
-    p = db.session.query(Camera).filter_by(id=id).first().password
-    i = db.session.query(Camera).filter_by(id=id).first().ip_addr
-    po = str(db.session.query(Camera).filter_by(id=id).first().port)
-    c = str(db.session.query(Camera).filter_by(id=id).first().channel)
-    s = str(db.session.query(Camera).filter_by(id=id).first().stream_type)
-
-    camera = 'rtsp://' + u + ':' + p + '@' + i + ':' + po + '/ch0' + c + '/' + s
-
-    cap = VideoStream(camera).start()
-    if cap.isOpened():
-        rval, frame = cap.read()
-    else:
-        rval = False
-    while rval:
-        rval, frame = cap.read()
-        key = cv2.waitKey(20)
-        if key == 27:
-            break
-        else:
-            cv2.line(img=frame, pt1=(10, 10), pt2=(100, 10), color=(
-                255, 0, 0), thickness=5, lineType=8, shift=0)
-            start_time = datetime.now()
-            writer = cv2.VideoWriter(cap, cv2.VideoWriter_fourcc(*'DIVX'), 20)
-            customerEntityId = 3
-            while True:
-                ret, frame = cap.read()
-
-                writer.write(frame)
-                writer.release()
-                end_time = datetime.now()
-                vid_file = 'transactions' + '/' + 'customer' + customerEntityId + '.png'
-                s3.Object(bucket, vid_file).put(Body=writer)
-                img_url = f"https://{bucket}.s3.amazonaws.com/{vid_file}"
-                videoLocation = img_url
-                entry = Transactions(start_time, end_time,
-                                     videoLocation, customerEntityId)
-                db.session.add(entry)
-                db.session.commit()
-
-    return jsonify("Success")
-
-
-@app.route("/shoplift-alerts", methods=['POST'])
-def shopliftAlerts():
-
-    id = 1
-    u = db.session.query(Camera).filter_by(id=id).first().u_name
-    p = db.session.query(Camera).filter_by(id=id).first().password
-    i = db.session.query(Camera).filter_by(id=id).first().ip_addr
-    po = str(db.session.query(Camera).filter_by(id=id).first().port)
-    c = str(db.session.query(Camera).filter_by(id=id).first().channel)
-    s = str(db.session.query(Camera).filter_by(id=id).first().stream_type)
-
-    camera = 'rtsp://' + u + ':' + p + '@' + i + ':' + po + '/ch0' + c + '/' + s
-
-    cap = VideoStream(camera).start()
-    if cap.isOpened():
-        rval, frame = cap.read()
-    else:
-        rval = False
-    while rval:
-        rval, frame = cap.read()
-        key = cv2.waitKey(20)
-        if key == 27:
-            break
-        else:
-            cv2.line(img=frame, pt1=(10, 10), pt2=(100, 10), color=(
-                255, 0, 0), thickness=5, lineType=8, shift=0)
-            start_time = datetime.now()
-            writer = cv2.VideoWriter(cap, cv2.VideoWriter_fourcc(*'DIVX'), 20)
-            customerEntityId = 3
-            while True:
-                ret, frame = cap.read()
-
-                writer.write(frame)
-                writer.release()
-                end_time = datetime.now()
-                vid_file = 'shoplift' + '/' + 'customer' + customerEntityId + '.png'
-                s3.Object(bucket, vid_file).put(Body=writer)
-                img_url = f"https://{bucket}.s3.amazonaws.com/{vid_file}"
-                videoLocation = img_url
-                entry = ShopLiftingAlerts(
-                    start_time, end_time, videoLocation, customerEntityId)
-                db.session.add(entry)
-                db.session.commit()
-
-    return jsonify("Success")
+    return jsonify({'Dataset_info': data_label})
 
 
 
@@ -594,6 +585,7 @@ def transactionQuery():
     return jsonify({'Transactions': t_q})
 
 
+
 @app.route("/alerts-query", methods=['GET'])
 def alertsQuery():
     query = Alerts.query.all()
@@ -602,6 +594,8 @@ def alertsQuery():
     for q in query:
         a_q.append(q.toDict())
     return jsonify({'Alerts': a_q})
+
+
 
 @app.route("/alert-query", methods=['POST'])
 def alertQuery():
