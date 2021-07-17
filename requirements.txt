@@ -1,7 +1,7 @@
 boto3
 Flask-SQLAlchemy
 Flask
-dotenv
+python-dotenv
 opencv-python
 opencv-contrib-python
 numpy
