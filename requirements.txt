@@ -2,3 +2,17 @@ boto3
 Flask-SQLAlchemy
 Flask
 dotenv
+opencv-python
+opencv-contrib-python
+numpy
+Pillow
+autopep8
+bcrypt
+botocore
+Flask
+helper
+imageio
+Jinja2
+psycopg2
+six
+Werkzeug
